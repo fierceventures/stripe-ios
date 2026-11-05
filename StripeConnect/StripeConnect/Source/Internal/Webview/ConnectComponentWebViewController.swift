@@ -613,6 +613,8 @@ private extension ConnectComponentWebViewController {
       const noArguments = objectCreate(null);
       const originalDocument = global.document;
       const objectKeys = Object.keys;
+      const freeze = Object.freeze;
+      const retainedHandlers = objectCreate(null);
       let documentID = null;
       if (global === global.top) {
         const random = new Uint32Array(4);
@@ -628,6 +630,7 @@ private extension ConnectComponentWebViewController {
       for (const name of ["openAuthenticatedWebView", "openFinancialConnections", "callSupplementalFunction"]) {
         const handler = global.webkit.messageHandlers[name];
         const postMessage = handler.postMessage;
+        defineProperty(retainedHandlers, name, { value: handler });
         defineProperty(handler, "postMessage", {
           configurable: false, enumerable: false, writable: false,
           value: (payload) => {
@@ -644,6 +647,11 @@ private extension ConnectComponentWebViewController {
           }
         });
       }
+      // WebKit can recreate an unrooted handler wrapper after JavaScript collection,
+      // losing its own postMessage override. Retain each wrapper on its document.
+      defineProperty(originalDocument, "__stripeConnectMessageHandlers", {
+        configurable: false, enumerable: false, writable: false, value: freeze(retainedHandlers)
+      });
       if (global !== global.top) { return; }
       let authority = null;
       let authoritySettled = false;

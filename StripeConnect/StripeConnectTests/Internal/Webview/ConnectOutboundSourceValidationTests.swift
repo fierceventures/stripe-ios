@@ -145,6 +145,28 @@ final class ConnectOutboundSourceValidationTests: XCTestCase {
         try await assertAuthenticationResultReachesOriginalDocument(html: Self.trustedAuthenticationHTML)
     }
 
+    func testAuthenticationResultReachesOriginalTrustedDocumentAfterAllocationPressure() async throws {
+        // Given the trusted document has installed its native-message wrappers.
+        let html = Self.trustedAuthenticationCallbackHTML + """
+        <script>
+        Promise.resolve().then(() => {
+          for (let turn = 0; turn < 20; turn++) {
+            const scratch = [];
+            for (let index = 0; index < 100000; index++) {
+              scratch.push({value: index, label: 'synthetic-allocation'});
+            }
+          }
+          window.webkit.messageHandlers.openAuthenticatedWebView.postMessage({
+            url: "https://example.test/auth", id: "outbound-test"
+          });
+        });
+        </script>
+        """
+        // When a later authentication request follows JavaScript allocation pressure,
+        // then its result still reaches the original authorized document.
+        try await assertAuthenticationResultReachesOriginalDocument(html: html)
+    }
+
     func testTrustedChildAuthenticationResultReachesContainingDocument() async throws {
         let html = Self.trustedAuthenticationCallbackHTML + """
         <iframe srcdoc='<!doctype html><script>
